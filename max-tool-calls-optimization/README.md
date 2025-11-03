@@ -1,100 +1,105 @@
-# Max Tool Calls Optimization Demo
+# Agno `max_tool_calls_from_history` Benchmark
 
-> Part of the [Agno Demos Collection](../)
+Benchmarking demonstration showing token and cost savings using Agno's `max_tool_calls_from_history` feature.
 
-A demonstration of how `max_tool_calls_from_history` dramatically reduces token usage and costs in multi-turn AI agent conversations.
+**Official Documentation:** https://docs.agno.com/examples/concepts/agent/context_management/filter_tool_calls_from_history
 
-## The Problem
+## Results
 
-In agentic workflows with tool-calling, conversation history can explode:
-- Every tool call is stored in context
-- Context grows linearly with each query
-- Token costs compound exponentially
-- Eventually hits context limits
+With 50 queries:
 
-## The Solution
+| Metric | Baseline | Optimized | Savings |
+|--------|----------|-----------|---------|
+| **Avg Context Size** | 25.5 tool calls | 3.9 tool calls | **84.8%** ⬇️ |
+| **Token Usage** | 10,578 tokens | 4,647 tokens | **56.1%** ⬇️ |
+| **Cost (GPT-4o-mini)** | $1.62 | $0.72 | **55.6%** ⬇️ |
 
-`max_tool_calls_from_history` limits how many historical tool calls are kept in context, providing:
-- 96% reduction in tool call history
-- 72% savings in tokens and cost
-- Constant context size - scales infinitely
-- No context limit issues at scale
-
-## What This Demo Shows
-
-This demo contains two scripts that run 30 identical queries to show the dramatic difference:
-
-### `optimized_agent.py` - WITH max_tool_calls_from_history=3
-- Only keeps 3 most recent tool calls in context
-- Massive token savings (~72%)
-- Cost savings (~72%)
-- Scales infinitely
-
-### `baseline_agent.py` - WITHOUT max_tool_calls_from_history
-- Keeps ALL tool calls in context
-- Token usage explodes
-- Higher costs
-- Will hit limits at scale
-
-## Installation
+## Quick Start
 
 ```bash
-# Clone the repo
-git clone https://github.com/YOUR-USERNAME/agno-demos.git
-cd agno-demos/max-tool-calls-optimization
+# 1. Install dependencies
+pip install agno openai
 
-# Install dependencies
-pip install agno openai duckduckgo-search
+# 2. Set your OpenAI API key
+export OPENAI_API_KEY='your-key-here'
 
-# Set your OpenAI API key
-export OPENAI_API_KEY='your-api-key-here'
+# 3. Run benchmark (~8-10 minutes)
+python benchmark.py
+
+# 4. Generate charts (optional)
+python generate_charts.py
 ```
 
-## Running the Demo
+## How It Works
 
-```bash
-# Run optimized agent (WITH limit)
-python optimized_agent.py
+Compares two agents running 50 identical queries:
 
-# Run baseline agent (WITHOUT limit)
-python baseline_agent.py
-```
-
-## Expected Results
-
-Example results from running 30 queries (actual numbers will vary):
-
-| Metric | WITHOUT | WITH | Savings |
-|--------|---------|------|---------|
-| Tool Calls in Context | 85 | 3 | **96.5%** |
-| Total Tokens | ~48,000 | ~15,000 | **~72%** |
-| Cost (GPT-4o) | ~$0.14 | ~$0.06 | **~72%** |
-
-At scale (100 queries):
-- **WITHOUT**: ~280 tool calls in context
-- **WITH**: Still only 3 tool calls
-
-**Note**: Exact numbers vary based on search results, LLM responses, and number of tool calls per query.
-
-## Key Takeaways
-
-1. **Without limit**: Context grows indefinitely, costs explode
-2. **With limit**: Context stays constant, predictable costs
-
-## Configuration
-
-Adjust the limit in `optimized_agent.py`:
+**Baseline Agent** (No optimization):
 ```python
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
-    tools=[DuckDuckGoTools()],
-    max_tool_calls_from_history=3,  # Adjust this value
     add_history_to_context=True,
+    num_history_runs=None,  # Unlimited - context grows: 1→2→3...→50
 )
 ```
 
-## Learn More
+**Optimized Agent** (With `max_tool_calls_from_history`):
+```python
+agent = Agent(
+    add_history_to_context=True,
+    num_history_runs=None,
+    max_tool_calls_from_history=3,  # Bounded - context: 1→2→3→4→4...→4
+)
+```
 
-- [Context Management Reference](./CONTEXT_MANAGEMENT.md) - Official documentation on managing tool calls
-- [Agno Documentation](https://docs.agno.com/introduction)
-- [OpenAI API Pricing](https://openai.com/pricing)
+## Key Insight
+
+The database preserves complete history. Two parameters control what the LLM sees in context:
+
+- **`num_history_runs`**: How many conversation runs to include
+- **`max_tool_calls_from_history`**: How many tool calls from those runs
+
+⚠️ **Critical**: Agno defaults to `num_history_runs=3` when you set `add_history_to_context=True`. 
+
+Without explicitly setting `num_history_runs=None`, both baseline and optimized agents would be limited to 3 runs, showing no savings!
+
+## Why Guaranteed Tool Calls?
+
+This benchmark uses a simple custom function that the agent MUST call:
+
+```python
+def get_info_about_topic(topic: str) -> str:
+    """Get information about a topic. This function ALWAYS gets called."""
+    return f"Latest research shows significant advances in {topic}."
+```
+
+Unlike optional tools (like web search), this guarantees:
+- ✅ Exactly 1 tool call per query
+- ✅ Predictable context growth
+- ✅ Clear demonstration of `max_tool_calls_from_history` benefit
+
+## Output Files
+
+After running the benchmark:
+- `benchmark_results_guaranteed_*.json` - Raw metrics
+- `chart_*.png` - Visualizations (if you run generate_charts.py)
+
+## Why Token Savings < Context Savings?
+
+Token savings (56%) are lower than context reduction (85%) because:
+- Not all tokens are tool calls (includes user messages, system prompts, responses)
+- Tool call outputs are similar length in both cases
+- The reduction is specifically in tool call history
+
+This is normal and expected!
+
+## Use Cases
+
+Perfect for:
+- 🔄 Multi-turn agentic workflows
+- 💬 Long-running conversations
+- 💰 Production cost optimization
+- 📊 Avoiding context limit issues
+
+## License
+
+MIT

@@ -47,3 +47,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Benchmark outputs (temporary)
+tmp/
+benchmark_results_*.json
+chart_*.png
